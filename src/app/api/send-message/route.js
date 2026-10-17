@@ -10,15 +10,30 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { conversationId, message: untrimmedMessage } = body ?? {}
+  // Older dashboard bundles (still cached in some open tabs) posted { recipient, message }
+  // instead of { psid, message }. Accept both so a stale tab keeps working.
+  const { psid: rawPsid, recipient, message: untrimmedMessage } = body ?? {}
+  const legacyDigits = typeof recipient === 'string' || typeof recipient === 'number'
+    ? String(recipient).replace(/\D/g, '')
+    : ''
+  const psid = typeof rawPsid === 'string' && rawPsid
+    ? rawPsid.trim()
+    : legacyDigits
+      ? `wa_${legacyDigits}`
+      : ''
   const message = typeof untrimmedMessage === 'string' ? untrimmedMessage.trim() : ''
-  if (
-    (typeof conversationId !== 'string' && typeof conversationId !== 'number') ||
-    String(conversationId).trim() === '' ||
-    message.length === 0 ||
-    message.length > 4096
-  ) {
-    return NextResponse.json({ success: false, error: 'Invalid conversation or message' }, { status: 400 })
+
+  if (!/^wa_\d{5,20}$/.test(psid)) {
+    return NextResponse.json(
+      { success: false, error: 'This conversation ID is not a valid WhatsApp number. Refresh the page and try again.' },
+      { status: 400 }
+    )
+  }
+  if (message.length === 0) {
+    return NextResponse.json({ success: false, error: 'Type a message before sending.' }, { status: 400 })
+  }
+  if (message.length > 4096) {
+    return NextResponse.json({ success: false, error: 'Message is too long (WhatsApp allows 4096 characters).' }, { status: 400 })
   }
 
   if (
@@ -30,19 +45,21 @@ export async function POST(request) {
   }
 
   try {
-    const { data: conversation, error: conversationError } = await supabase
-      .from('conversations')
-      .select('phone_number')
-      .eq('id', conversationId)
+    const { data: customer, error: conversationError } = await supabase
+      .from('customers')
+      .select('psid,platform')
+      .eq('psid', psid)
+      .eq('platform', 'whatsapp')
       .maybeSingle()
 
     if (conversationError) {
       return NextResponse.json({ success: false, error: 'Could not load conversation' }, { status: 500 })
     }
-    if (!conversation?.phone_number) {
+    if (!customer?.psid) {
       return NextResponse.json({ success: false, error: 'Conversation not found' }, { status: 404 })
     }
 
+    const phoneNumber = psid.replace(/^wa_/, '')
     const graphApiBase = `${process.env.WHATSAPP_GRAPH_API_URL.replace(/\/+$/, '')}/`
     const whatsappEndpoint = new URL(
       `${encodeURIComponent(process.env.WHATSAPP_PHONE_NUMBER_ID)}/messages`,
@@ -56,7 +73,7 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to: conversation.phone_number,
+        to: phoneNumber,
         type: 'text',
         text: { body: message },
       }),
@@ -71,16 +88,29 @@ export async function POST(request) {
       )
     }
 
+    const sentAt = new Date().toISOString()
+    const externalMessageId = whatsappData?.messages?.[0]?.id
+    const { data: botSettings } = await supabase.from('bot_settings').select('auto_pause_on_human').eq('id', 1).maybeSingle()
+    const shouldPause = Boolean(botSettings?.auto_pause_on_human)
+
     const [{ data: savedMessage, error: messageError }, { error: conversationUpdateError }] = await Promise.all([
       supabase.from('messages').insert({
-        conversation_id: conversationId,
-        sender: 'agent',
-        message_text: message,
+        psid,
+        platform: 'whatsapp',
+        sender: 'human',
+        text: message,
+        mid: externalMessageId ? `wa_${externalMessageId}` : null,
+        created_at: sentAt,
       }).select('*').single(),
       supabase
-        .from('conversations')
-        .update({ bot_active: false, last_message_at: new Date().toISOString() })
-        .eq('id', conversationId),
+        .from('customers')
+        .update({
+          last_message_text: message,
+          last_activity_at: sentAt,
+          ...(shouldPause ? { bot_active: false } : {}),
+        })
+        .eq('psid', psid)
+        .eq('platform', 'whatsapp'),
     ])
 
     return NextResponse.json({

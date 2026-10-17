@@ -1,0 +1,510 @@
+/* ============================================================
+   NOTIFICATIONS v2: toasts, panel, bell and tab badges
+   ============================================================ */
+
+/* ---------- Toasts ---------- */
+.ntf-toasts {
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(384px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.ntf-toast {
+  --ntf-accent: var(--ntf-platform, var(--accent));
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  overflow: hidden;
+  padding: 12px 40px 15px 14px;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--ntf-accent) 32%, var(--line));
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 22px 48px -14px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  animation: ntf-in 380ms cubic-bezier(0.2, 0.9, 0.25, 1.08) both;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.ntf-toast:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 26px 54px -14px rgba(0, 0, 0, 0.62),
+    0 0 0 1px color-mix(in srgb, var(--ntf-accent) 30%, transparent) inset;
+}
+
+.ntf-toast::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--ntf-accent), color-mix(in srgb, var(--ntf-accent) 40%, transparent));
+}
+
+.ntf-toast--urgent {
+  --ntf-accent: #f5a524;
+  animation: ntf-in 380ms cubic-bezier(0.2, 0.9, 0.25, 1.08) both, ntf-glow 1.8s ease-in-out 3;
+}
+
+.ntf-toast__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.ntf-toast__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ntf-toast__title {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ntf-toast__text {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ntf-toast__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  font-size: 12px;
+  color: var(--muted);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.ntf-toast__close:hover {
+  background: var(--surface-raised);
+  color: var(--foreground);
+}
+
+.ntf-toast__progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--ntf-accent);
+  opacity: 0.85;
+  transform-origin: left center;
+  animation: ntf-progress var(--ntf-duration, 6s) linear forwards;
+}
+
+.ntf-toast:hover .ntf-toast__progress {
+  animation-play-state: paused;
+}
+
+/* ---------- Avatar with platform dot ---------- */
+.ntf-avatar {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ntf-c1, #24d9e6), var(--ntf-c2, #1b8fb3));
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--ntf-c1, #24d9e6) 70%, transparent);
+}
+
+.ntf-avatar__dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 9999px;
+  border: 2px solid var(--surface);
+  font-size: 8px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--ntf-platform, #24d9e6);
+}
+
+/* ---------- Chips ---------- */
+.ntf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--ntf-chip, var(--muted)) 40%, transparent);
+  background: color-mix(in srgb, var(--ntf-chip, var(--muted)) 12%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--ntf-chip, var(--muted));
+}
+
+.ntf-chip--urgent { --ntf-chip: #f5a524; }
+.ntf-chip--comment { --ntf-chip: #a78bfa; }
+.ntf-chip--media { --ntf-chip: #38bdf8; }
+.ntf-chip--message { --ntf-chip: #36e5ad; }
+
+/* ---------- Bell ---------- */
+.ntf-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--foreground);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.ntf-bell:hover {
+  background: var(--surface-raised);
+  border-color: var(--accent);
+}
+
+.ntf-bell:active {
+  transform: scale(0.94);
+}
+
+.ntf-bell[aria-expanded='true'] {
+  border-color: var(--accent);
+  background: var(--selected-bg);
+}
+
+.ntf-bell--ring svg {
+  transform-origin: 50% 8%;
+  animation: ntf-ring 800ms ease-in-out;
+}
+
+/* ---------- Red counter badge (bell + tabs) ---------- */
+.ntf-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5d73, #e11d48);
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 4px 10px -2px rgba(225, 29, 72, 0.6);
+  animation: ntf-badge-pop 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  font-variant-numeric: tabular-nums;
+}
+
+.ntf-badge--corner {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  z-index: 1;
+}
+
+/* ---------- Panel ---------- */
+.ntf-panel {
+  position: absolute;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 94vw);
+  max-height: 85vh;
+  margin-top: 10px;
+  overflow: hidden;
+  transform-origin: top right;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow:
+    0 30px 70px -18px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  animation: ntf-pop 200ms cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+}
+
+.ntf-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 70%, transparent), transparent);
+}
+
+.ntf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.ntf-icon-btn:hover {
+  background: var(--surface-raised);
+  color: var(--foreground);
+}
+
+.ntf-icon-btn--accent {
+  color: var(--accent);
+}
+
+.ntf-pill {
+  flex: none;
+  padding: 4px 11px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ntf-pill:hover {
+  background: var(--surface-raised);
+  color: var(--foreground);
+}
+
+.ntf-pill.is-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.ntf-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 16px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.ntf-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px 12px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 140ms ease;
+}
+
+.ntf-item:hover {
+  background: color-mix(in srgb, var(--surface-raised) 75%, transparent);
+}
+
+.ntf-item.is-unread {
+  border-left-color: var(--ntf-platform, var(--accent));
+  background: color-mix(in srgb, var(--selected-bg) 42%, transparent);
+}
+
+.ntf-item.is-urgent {
+  border-left-color: #f5a524;
+}
+
+.ntf-item__title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ntf-item__text {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ntf-item.is-unread .ntf-item__text {
+  color: color-mix(in srgb, var(--foreground) 78%, var(--muted));
+}
+
+.ntf-item__delete {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.ntf-item:hover .ntf-item__delete,
+.ntf-item__delete:focus-visible {
+  opacity: 1;
+}
+
+.ntf-item__delete:hover {
+  background: var(--danger-bg, rgba(225, 29, 72, 0.15));
+  color: var(--danger-text, #fb7185);
+}
+
+.ntf-unread-dot {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--ntf-platform, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ntf-platform, var(--accent)) 22%, transparent);
+}
+
+.ntf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ntf-empty__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  font-size: 22px;
+  background: var(--surface-raised);
+}
+
+.ntf-notice {
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, #f5be5b 40%, transparent);
+  background: color-mix(in srgb, #f5be5b 10%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f5be5b;
+}
+
+/* ---------- Header tabs ---------- */
+.ntf-tab {
+  position: relative;
+}
+
+/* ---------- Animations ---------- */
+@keyframes ntf-in {
+  from { opacity: 0; transform: translateX(36px) scale(0.95); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ntf-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ntf-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes ntf-glow {
+  0%, 100% { box-shadow: 0 22px 48px -14px rgba(0, 0, 0, 0.55), 0 0 0 0 rgba(245, 165, 36, 0); }
+  50% { box-shadow: 0 22px 48px -14px rgba(0, 0, 0, 0.55), 0 0 0 5px rgba(245, 165, 36, 0.28); }
+}
+
+@keyframes ntf-ring {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(16deg); }
+  30% { transform: rotate(-13deg); }
+  45% { transform: rotate(9deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes ntf-badge-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ntf-toast,
+  .ntf-toast--urgent,
+  .ntf-panel,
+  .ntf-badge,
+  .ntf-bell--ring svg {
+    animation: none;
+  }
+}

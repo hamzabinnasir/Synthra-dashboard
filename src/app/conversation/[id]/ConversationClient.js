@@ -5,6 +5,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { appUrl } from '@/lib/app-url'
 import ThemeToggle from '../../ThemeToggle'
+import { getConversationDisplayTitles } from '../../../../lib/conversation-helpers.js'
+import MediaMessage from '../../MediaMessage'
+import CustomerAvatar from '../../CustomerAvatar'
+import { useConversationMessages } from '../../useConversationMessages'
 
 function formatMessageTime(value) {
   const date = new Date(value)
@@ -16,91 +20,91 @@ function formatMessageTime(value) {
   }).format(date)
 }
 
-function mergeMessages(currentMessages, newMessages) {
-  const existingIds = new Set(currentMessages.map((message) => message.id))
-  const uniqueMessages = newMessages.filter((message) => !existingIds.has(message.id))
-
-  return [...currentMessages, ...uniqueMessages].sort(
-    (left, right) => new Date(left.created_at) - new Date(right.created_at)
-  )
-}
-
 const replyEmojis = ['😀', '😂', '😊', '😍', '👍', '🙏', '🎉', '❤️', '✨', '🚀', '🤖', '💡']
 
-export default function ConversationClient({ conversation, initialMessages }) {
-  const [messages, setMessages] = useState(initialMessages)
-  const [botActive, setBotActive] = useState(conversation.bot_active)
+// Mirrors what WhatsApp (and /api/send-media) accepts; the server re-validates everything.
+const ATTACH_ACCEPT = '.jpg,.jpeg,.png,.mp4,.3gp,.aac,.m4a,.mp3,.amr,.ogg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt'
+const MAX_ATTACH_BYTES = 10 * 1024 * 1024
+
+function formatFileSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export default function ConversationClient({ conversation, initialMessages, initialError = false }) {
+  const [conv, setConv] = useState(conversation)
+  const conversationId = conv.psid
+
+  // Headline and sub-headline formatting (customer name as main headline, phone/username as sub-headline)
+  const { headline, subHeadline, initials } = getConversationDisplayTitles(conv, 'whatsapp')
+
+  const {
+    messages,
+    liveStatus,
+    loadError,
+    historyLoading,
+    retryHistory,
+    mergeMessages,
+    removeLocally,
+    clearLocally,
+  } = useConversationMessages({
+    conversationId,
+    initialMessages,
+    initialError,
+    eventsUrl: appUrl(`/api/conversation/${conversationId}/events`),
+    messagesUrl: appUrl(`/api/conversation/${conversationId}/messages`),
+    markReadUrl: appUrl('/api/conversation/mark-read'),
+  })
+
+  const [botActive, setBotActive] = useState(conv.bot_active)
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [requestError, setRequestError] = useState('')
-  const [liveStatus, setLiveStatus] = useState('connecting')
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
+  const [clearingHistory, setClearingHistory] = useState(false)
   const messagesEndRef = useRef(null)
   const replyInputRef = useRef(null)
 
+  // File attachment (sent via /api/send-media -> Cloudinary -> WhatsApp)
+  const [attachment, setAttachment] = useState(null)
+  const [attachmentPreview, setAttachmentPreview] = useState('')
+  const fileInputRef = useRef(null)
+
+  // Rename contact modal state
+  const [renameModalOpen, setRenameModalOpen] = useState(false)
+  const [renameInput, setRenameInput] = useState(conv.custom_name || conv.name || '')
+  const [savingRename, setSavingRename] = useState(false)
+  const [renameError, setRenameError] = useState('')
+
+  // The whole chat history is shown in one scrollable thread (no pagination);
+  // keep the newest message in view whenever the thread changes.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
   }, [messages])
 
-  useEffect(() => {
-    const eventSource = new EventSource(appUrl(`/api/conversation/${conversation.id}/events`))
+  const [deletingId, setDeletingId] = useState(null)
 
-    eventSource.addEventListener('ready', () => setLiveStatus('live'))
-    eventSource.addEventListener('new-message', (event) => {
-      try {
-        const incomingMessage = JSON.parse(event.data)
-        setMessages((currentMessages) => mergeMessages(currentMessages, [incomingMessage]))
-      } catch {
-        setLiveStatus('syncing')
-      }
-    })
-    eventSource.addEventListener('realtime-error', () => setLiveStatus('syncing'))
-    eventSource.onerror = () => setLiveStatus('syncing')
-
-    return () => {
-      eventSource.close()
+  const handleDeleteMessage = async (messageId) => {
+    if (!messageId || deletingId || !window.confirm('Delete this message?')) return
+    setDeletingId(messageId)
+    setRequestError('')
+    try {
+      const response = await fetch(appUrl('/api/delete-message'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      })
+      const data = await response.json()
+      if (!response.ok || !data.success) throw new Error(data.error || 'Could not delete message')
+      // Remove from the screen only once the server (Supabase + Cloudinary) confirmed.
+      removeLocally(messageId)
+    } catch (error) {
+      setRequestError(error.message || 'Could not delete message')
+    } finally {
+      setDeletingId(null)
     }
-  }, [conversation.id])
-
-  useEffect(() => {
-    if (liveStatus === 'live') return
-
-    let active = true
-    let requestPending = false
-    let cursor = initialMessages.at(-1)?.created_at || ''
-
-    const syncMessages = async () => {
-      if (requestPending) return
-      requestPending = true
-
-      try {
-        const query = cursor ? `?after=${encodeURIComponent(cursor)}` : ''
-        const response = await fetch(appUrl(`/api/conversation/${conversation.id}/messages${query}`), {
-          cache: 'no-store',
-        })
-        if (!response.ok) return
-
-        const { messages: newMessages } = await response.json()
-        if (!active || newMessages.length === 0) return
-
-        cursor = newMessages.at(-1).created_at || cursor
-        setMessages((currentMessages) => mergeMessages(currentMessages, newMessages))
-      } catch {
-        setLiveStatus('syncing')
-      } finally {
-        requestPending = false
-      }
-    }
-
-    void syncMessages()
-    const interval = setInterval(syncMessages, 2500)
-
-    return () => {
-      active = false
-      clearInterval(interval)
-    }
-  }, [conversation.id, initialMessages, liveStatus])
+  }
 
   const handleToggleBot = async () => {
     if (toggling) return
@@ -112,10 +116,17 @@ export default function ConversationClient({ conversation, initialMessages }) {
       const response = await fetch(appUrl('/api/toggle-bot'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: conversation.id, botActive: newState }),
+        body: JSON.stringify({
+          psid: conversationId,
+          botActive: newState,
+        }),
       })
+
       const data = await response.json()
-      if (!response.ok || !data.success) throw new Error(data.error || 'Could not update bot status')
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Could not update bot status')
+      }
+
       setBotActive(newState)
     } catch (error) {
       setRequestError(error.message || 'Could not update bot status')
@@ -124,54 +135,151 @@ export default function ConversationClient({ conversation, initialMessages }) {
     }
   }
 
+  const handleClearHistory = async () => {
+    if (clearingHistory || !window.confirm(
+      `Clear this WhatsApp chat history from the dashboard? This removes the stored history and any media files here; it does not delete messages from WhatsApp.`
+    )) {
+      return
+    }
+
+    setClearingHistory(true)
+    setRequestError('')
+
+    try {
+      // Dedicated WhatsApp route (the old '/api/clear-history' path does not exist).
+      const response = await fetch(appUrl('/api/clear-whatsapp-history'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ psid: conversationId }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Could not clear chat history')
+      }
+
+      clearLocally()
+    } catch (error) {
+      setRequestError(error.message || 'Could not clear chat history')
+    } finally {
+      setClearingHistory(false)
+    }
+  }
+
+  const handleSaveRename = async (e) => {
+    e.preventDefault()
+    setSavingRename(true)
+    setRenameError('')
+    try {
+      const res = await fetch(appUrl('/api/conversation/edit-name'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ psid: conversationId, customName: renameInput.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not save name')
+      setConv((prev) => ({
+        ...prev,
+        custom_name: renameInput.trim() || null,
+      }))
+      setRenameModalOpen(false)
+    } catch (err) {
+      setRenameError(err.message || 'Error updating name')
+    } finally {
+      setSavingRename(false)
+    }
+  }
+
+  const clearAttachment = () => {
+    setAttachment(null)
+    setAttachmentPreview((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return ''
+    })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleFileSelected = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setRequestError('')
+
+    if (file.size > MAX_ATTACH_BYTES) {
+      setRequestError(`That file is ${formatFileSize(file.size)}. The maximum is ${formatFileSize(MAX_ATTACH_BYTES)}.`)
+      event.target.value = ''
+      return
+    }
+
+    setAttachmentPreview((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return file.type.startsWith('image/') ? URL.createObjectURL(file) : ''
+    })
+    setAttachment(file)
+  }
+
   const handleSend = async () => {
-    if (!replyText.trim() || sending) return
+    const trimmed = replyText.trim()
+    if ((!trimmed && !attachment) || sending) return
+
     setSending(true)
     setRequestError('')
 
     try {
-      const message = replyText.trim()
-      const response = await fetch(appUrl('/api/send-message'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: conversation.id, message }),
-      })
-      const data = await response.json()
-      if (!response.ok || !data.success) throw new Error(data.error || 'Could not send message')
-
-      const sentMessage = data.message || {
-        id: `local-${Date.now()}`,
-        sender: 'agent',
-        message_text: message,
-        created_at: new Date().toISOString(),
+      let response
+      if (attachment) {
+        // File path: browser -> /api/send-media -> Cloudinary -> WhatsApp, then saved to the chat.
+        const formData = new FormData()
+        formData.set('psid', conversationId)
+        formData.set('file', attachment)
+        if (trimmed) formData.set('caption', trimmed)
+        response = await fetch(appUrl('/api/send-media'), { method: 'POST', body: formData })
+      } else {
+        response = await fetch(appUrl('/api/send-message'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            psid: conversationId,
+            message: trimmed,
+          }),
+        })
       }
-      setMessages((currentMessages) => mergeMessages(currentMessages, [sentMessage]))
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || (attachment ? 'Could not send file' : 'Could not send message'))
+      }
+
+      if (data.message) {
+        mergeMessages([data.message])
+      }
+
+      if (attachment) clearAttachment()
       setReplyText('')
-      setBotActive(false)
-      setRequestError(data.warning || '')
+      replyInputRef.current?.focus()
     } catch (error) {
-      setRequestError(error.message || 'Could not send message')
+      setRequestError(error.message || (attachment ? 'Could not send file' : 'Could not send message'))
     } finally {
       setSending(false)
     }
   }
 
-  const insertEmoji = (emoji) => {
+  const handleEmojiSelect = (emoji) => {
     const input = replyInputRef.current
-    const start = input?.selectionStart ?? replyText.length
-    const end = input?.selectionEnd ?? replyText.length
-
-    setReplyText(`${replyText.slice(0, start)}${emoji}${replyText.slice(end)}`)
+    const cursor = input ? input.selectionStart : replyText.length
+    const nextText = `${replyText.slice(0, cursor)}${emoji}${replyText.slice(cursor)}`
+    setReplyText(nextText)
     setEmojiPickerOpen(false)
+
     requestAnimationFrame(() => {
       input?.focus()
-      input?.setSelectionRange(start + emoji.length, start + emoji.length)
+      const nextPosition = cursor + emoji.length
+      input?.setSelectionRange(nextPosition, nextPosition)
     })
   }
 
   return (
-    <div className="app-shell flex h-dvh min-h-112 flex-col overflow-hidden">
-      <header className="chat-header z-10 flex shrink-0 items-center justify-between gap-3 border-b px-3 py-3 backdrop-blur sm:px-6">
+    <div className="app-shell chat-page-shell flex h-dvh min-h-0 flex-col overflow-hidden">
+      <header className="chat-header z-10 flex shrink-0 items-center justify-between gap-2 border-b px-3 py-3 backdrop-blur sm:gap-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <Link
             href="/"
@@ -186,14 +294,32 @@ export default function ConversationClient({ conversation, initialMessages }) {
             <p className="theme-muted text-xs">WhatsApp inbox</p>
           </div>
           <span className="mx-1 hidden h-8 w-px bg-[#263a4e] sm:block" />
-          <div className="chat-profile-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-            {String(conversation.phone_number || 'U').replace(/\D/g, '').slice(-2) || 'U'}
-          </div>
+          <CustomerAvatar
+            src={conv.profile_pic_url}
+            initials={initials}
+            className="chat-profile-avatar h-9 w-9 shrink-0 rounded-full text-xs font-semibold flex items-center justify-center"
+          />
           <div className="min-w-0">
-            <h1 className="theme-text truncate text-sm font-semibold sm:text-base">{conversation.phone_number}</h1>
-            <p className="theme-muted truncate text-xs">{conversation.lead_status || 'Customer'}</p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="theme-text truncate text-sm font-semibold sm:text-base">{headline}</h1>
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameInput(conv.custom_name || conv.name || '')
+                  setRenameModalOpen(true)
+                }}
+                title="Edit conversation display name"
+                className="text-xs opacity-60 hover:opacity-100 hover:text-(--accent) transition p-0.5 cursor-pointer"
+              >
+                ✏️
+              </button>
+            </div>
+            {subHeadline && subHeadline !== headline && (
+              <p className="text-xs font-medium text-(--accent) truncate">{subHeadline}</p>
+            )}
           </div>
         </div>
+
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           <ThemeToggle />
           <span
@@ -207,29 +333,96 @@ export default function ConversationClient({ conversation, initialMessages }) {
           <button
             onClick={handleToggleBot}
             disabled={toggling}
-            aria-label={botActive ? 'Pause bot and take over manually' : 'Resume bot replies'}
+            aria-label={`${botActive ? 'Disable' : 'Enable'} bot for ${headline}`}
             aria-pressed={botActive}
             className={`chat-bot-toggle flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:px-4 sm:text-sm ${botActive ? 'is-active' : 'is-inactive'}`}
           >
             <span className={`h-2 w-2 rounded-full ${botActive ? 'bg-[#36e5ad]' : 'bg-[#ba8cff]'}`} />
-            <span className="hidden sm:inline">{toggling ? 'Updating...' : botActive ? 'Bot active' : 'Manual replies'}</span>
-            <span className="sm:hidden">{toggling ? '...' : botActive ? 'Bot' : 'Manual'}</span>
+            <span className="hidden sm:inline">{toggling ? 'Updating...' : botActive ? 'Disable' : 'Enable'}</span>
+            <span className="sm:hidden">{toggling ? '...' : botActive ? 'Disable' : 'Enable'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleClearHistory}
+            disabled={clearingHistory}
+            className="chat-bot-toggle rounded-full px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:px-4 sm:text-sm"
+          >
+            {clearingHistory ? 'Clearing…' : 'Clear chat'}
           </button>
         </div>
       </header>
+
+      {/* Rename Modal */}
+      {renameModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-sm rounded-2xl border border-(--line) bg-(--surface) p-5 shadow-2xl">
+            <h2 className="text-sm font-bold text-(--foreground) mb-1">Edit Display Name</h2>
+            <p className="text-xs theme-muted mb-4">Set a custom contact name. This will never be overwritten by WhatsApp syncs.</p>
+            <form onSubmit={handleSaveRename} className="flex flex-col gap-3">
+              <input
+                type="text"
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                placeholder="Enter custom contact name..."
+                className="chat-input rounded-xl px-3 py-2 text-sm outline-none"
+                autoFocus
+                maxLength={80}
+              />
+              {renameError && <p className="text-xs text-red-400">{renameError}</p>}
+              <div className="flex items-center justify-end gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setRenameModalOpen(false)}
+                  disabled={savingRename}
+                  className="rounded-xl border border-(--line) px-3 py-1.5 text-xs text-(--muted) hover:text-(--foreground)"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRename}
+                  className="rounded-xl bg-(--accent) px-4 py-1.5 text-xs font-semibold text-(--accent-text) transition hover:brightness-110 disabled:opacity-50"
+                >
+                  {savingRename ? 'Saving...' : 'Save Name'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {requestError && (
         <p role="alert" className="chat-error z-10 border-b px-4 py-2 text-center text-sm">
           {requestError}
         </p>
       )}
+      {loadError && messages.length > 0 && (
+        <p role="status" className="chat-error z-10 border-b px-4 py-2 text-center text-sm">
+          Earlier messages could not be loaded yet. Retrying…{' '}
+          <button type="button" onClick={retryHistory} className="underline">Retry now</button>
+        </p>
+      )}
+      <p className="theme-muted border-b px-4 py-1.5 text-center text-[11px]">
+        Clearing removes this chat history (and its media files) from the dashboard; it does not delete messages from WhatsApp.
+      </p>
 
       <main className="chat-thread min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-6 sm:py-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:gap-4">
           {messages.length === 0 ? (
-            <p className="py-16 text-center text-sm text-[#8da2b7]">No messages in this conversation yet.</p>
+            loadError ? (
+              <div role="alert" className="py-16 text-center text-sm">
+                <p className="text-[#8da2b7]">Could not load this conversation&apos;s history. Retrying automatically…</p>
+                <button type="button" onClick={retryHistory} disabled={historyLoading} className="chat-bot-toggle mt-3 rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-60">
+                  {historyLoading ? 'Loading…' : 'Retry now'}
+                </button>
+              </div>
+            ) : historyLoading ? (
+              <p className="py-16 text-center text-sm text-[#8da2b7]">Loading conversation…</p>
+            ) : (
+              <p className="py-16 text-center text-sm text-[#8da2b7]">No messages in this conversation yet.</p>
+            )
           ) : messages.map((msg, index) => {
-            const isIncoming = msg.sender === 'user'
+            const isIncoming = msg.sender === 'customer'
 
             return (
               <article
@@ -245,13 +438,35 @@ export default function ConversationClient({ conversation, initialMessages }) {
                 >
                   <div className="mb-1 flex items-center justify-between gap-5">
                     <p className={`text-xs font-semibold ${isIncoming ? 'chat-sender--incoming' : 'chat-sender--outgoing'}`}>
-                      {isIncoming ? conversation.phone_number : 'Synthra AI'}
+                      {isIncoming ? headline : msg.sender === 'human' ? 'You' : 'Synthra AI'}
                     </p>
-                    <time className="chat-time shrink-0 text-[11px]" dateTime={msg.created_at}>
-                      {formatMessageTime(msg.created_at)}
-                    </time>
+                    <div className="flex items-center gap-1.5">
+                      <time className="chat-time shrink-0 text-[11px]" dateTime={msg.created_at}>
+                        {formatMessageTime(msg.created_at)}
+                      </time>
+                      {msg.id && (
+                        <button
+                          type="button"
+                          title="Delete message"
+                          aria-label="Delete message"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          disabled={deletingId === msg.id}
+                          className="text-[11px] opacity-40 hover:opacity-100 hover:text-red-400 transition cursor-pointer p-0.5"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="wrap-break-word whitespace-pre-wrap text-sm leading-6 sm:text-[15px]">{msg.message_text}</p>
+
+                  {/* Media attachment rendering */}
+                  {msg.media_url && (
+                    <MediaMessage message={msg} incoming={isIncoming} />
+                  )}
+
+                  {msg.text && (
+                    <p className="wrap-break-word whitespace-pre-wrap text-sm leading-6 sm:text-[15px]">{msg.text}</p>
+                  )}
                 </div>
               </article>
             )
@@ -261,6 +476,29 @@ export default function ConversationClient({ conversation, initialMessages }) {
       </main>
 
       <footer className="chat-composer shrink-0 px-3 py-3 sm:px-6 sm:py-4">
+        {attachment && (
+          <div className="mx-auto mb-2 flex w-full max-w-4xl items-center gap-3 rounded-xl border border-(--line) p-2">
+            {attachmentPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={attachmentPreview} alt="" className="h-12 w-12 rounded-lg object-cover" />
+            ) : (
+              <span className="flex h-12 w-12 items-center justify-center rounded-lg text-xl">📄</span>
+            )}
+            <div className="min-w-0 flex-1 text-xs">
+              <p className="truncate font-semibold">{attachment.name}</p>
+              <p className="theme-muted">{formatFileSize(attachment.size)} · any text below is sent as the caption</p>
+            </div>
+            <button
+              type="button"
+              onClick={clearAttachment}
+              disabled={sending}
+              aria-label="Remove attachment"
+              className="px-2 text-sm opacity-70 hover:opacity-100 disabled:opacity-30"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <form
           className="mx-auto flex w-full max-w-4xl items-end gap-2 sm:gap-3"
           onSubmit={(event) => {
@@ -268,6 +506,23 @@ export default function ConversationClient({ conversation, initialMessages }) {
             handleSend()
           }}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ATTACH_ACCEPT}
+            onChange={handleFileSelected}
+            className="hidden"
+          />
+          <button
+            type="button"
+            title="Attach file"
+            aria-label="Attach file"
+            disabled={sending}
+            onClick={() => fileInputRef.current?.click()}
+            className="emoji-button flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl transition disabled:opacity-50"
+          >
+            📎
+          </button>
           <div className="relative shrink-0">
             <button
               type="button"
@@ -291,7 +546,7 @@ export default function ConversationClient({ conversation, initialMessages }) {
                     key={emoji}
                     type="button"
                     aria-label={`Insert ${emoji}`}
-                    onClick={() => insertEmoji(emoji)}
+                    onClick={() => handleEmojiSelect(emoji)}
                     className="emoji-choice flex aspect-square items-center justify-center rounded-lg text-xl transition"
                   >
                     {emoji}
@@ -300,12 +555,15 @@ export default function ConversationClient({ conversation, initialMessages }) {
               </div>
             )}
           </div>
-          <label className="sr-only" htmlFor="reply-message">Write a message</label>
+
+          <label className="sr-only" htmlFor="dashboard-reply-input">
+            Write a WhatsApp reply
+          </label>
           <textarea
             ref={replyInputRef}
-            id="reply-message"
+            id="dashboard-reply-input"
             rows={1}
-            maxLength={4096}
+            maxLength={1000}
             value={replyText}
             onChange={(event) => setReplyText(event.target.value)}
             onKeyDown={(event) => {
@@ -314,12 +572,13 @@ export default function ConversationClient({ conversation, initialMessages }) {
                 handleSend()
               }
             }}
-            placeholder="Message Synthra AI..."
+            placeholder="Type a message..."
             className="chat-input max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl px-4 py-3 text-sm outline-none transition"
           />
+
           <button
             type="submit"
-            disabled={sending || !replyText.trim()}
+            disabled={sending || (!replyText.trim() && !attachment)}
             className="chat-send-button h-11 shrink-0 rounded-xl px-4 text-sm font-bold shadow-[0_5px_20px_rgba(17,189,217,0.18)] transition hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed sm:px-6"
           >
             {sending ? 'Sending...' : 'Send'}

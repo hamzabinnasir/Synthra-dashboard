@@ -88,10 +88,18 @@ textarea {
 }
 
 .chat-thread {
+  min-height: 0;
+  overscroll-behavior-y: contain;
   background-color: var(--background);
   background-image: var(--pattern-url);
   background-repeat: repeat;
   background-size: 280px 280px;
+}
+
+.chat-page-shell {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
 }
 
 .app-shell {
@@ -177,6 +185,9 @@ textarea {
 
 .conversation-row {
   display: flex;
+  /* Wrap so a full-width child (the rename editor) drops onto its own line
+     instead of being squeezed in beside the name and the bot toggle. */
+  flex-wrap: wrap;
   min-height: 82px;
   align-items: center;
   justify-content: space-between;
@@ -226,6 +237,7 @@ textarea {
 }
 
 .conversation-row__copy {
+  flex: 1;
   gap: 4px;
 }
 
@@ -290,6 +302,268 @@ textarea {
   height: 7px;
   border-radius: 50%;
   background: currentColor;
+}
+
+.conversation-row__delete {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--danger-border);
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 120ms ease, background-color 150ms ease;
+}
+
+.conversation-row__delete:hover {
+  opacity: 0.85;
+  transform: scale(1.06);
+}
+
+.conversation-row__delete:focus-visible {
+  outline: 2px solid var(--danger-text);
+  outline-offset: 2px;
+}
+
+.conversation-row__delete:disabled {
+  opacity: 0.45;
+  cursor: wait;
+  transform: none;
+}
+
+/* ---------- Rename (edit display name) ---------- */
+.conversation-row__rename {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.conversation-row__rename:hover,
+.conversation-row__rename[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.conversation-row__rename:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Full-width panel that opens UNDER the row content (own flex line), never beside it. */
+.conversation-row__editor {
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  animation: conversation-editor-in 160ms ease-out both;
+}
+
+.conversation-row__editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.conversation-row__editor-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.conversation-row__editor-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.conversation-row__editor-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.conversation-row__editor-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.conversation-row__editor-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.conversation-row__editor-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.conversation-row__editor-save,
+.conversation-row__editor-cancel {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.conversation-row__editor-save {
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.conversation-row__editor-save:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.conversation-row__editor-cancel {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.conversation-row__editor-cancel:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.conversation-row__editor-save:disabled,
+.conversation-row__editor-cancel:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.conversation-row__editor-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--danger-text);
+}
+
+@keyframes conversation-editor-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 480px) {
+  .conversation-row__editor-actions {
+    flex: 1 1 100%;
+  }
+
+  .conversation-row__editor-save,
+  .conversation-row__editor-cancel {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-row__editor {
+    animation: none;
+  }
+}
+
+.delete-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--danger-border);
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 120ms ease;
+}
+
+.delete-all-btn:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+.delete-all-btn:focus-visible {
+  outline: 2px solid var(--danger-text);
+  outline-offset: 2px;
+}
+
+.delete-all-btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+  transform: none;
+}
+
+.bot-switch {
+  display: inline-flex;
+  width: 42px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--inactive-border);
+  border-radius: 999px;
+  background: var(--inactive-bg);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+.bot-switch.is-on {
+  justify-content: flex-end;
+  border-color: var(--active-border);
+  background: var(--active-bg);
+}
+
+.bot-switch.is-off {
+  justify-content: flex-start;
+}
+
+.bot-switch__thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--inactive-text);
+  transition: background-color 150ms ease;
+}
+
+.bot-switch.is-on .bot-switch__thumb {
+  background: var(--active-text);
+}
+
+.bot-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.bot-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .conversation-row__error {
@@ -449,3 +723,150 @@ textarea {
 .emoji-panel {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
 }
+
+/* ============================================================
+   NOTIFICATION CENTER & DROPDOWN
+   ============================================================ */
+.notification-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--foreground);
+  transition: all 180ms ease;
+  cursor: pointer;
+}
+
+.notification-bell:hover {
+  background: var(--surface-raised);
+  border-color: var(--accent);
+}
+
+.notification-dropdown {
+  background: var(--header);
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+}
+
+/* ============================================================
+   MEDIA ATTACHMENTS IN CHAT
+   ============================================================ */
+.media-message-container {
+  width: 100%;
+}
+
+.media-message-container audio {
+  filter: contrast(110%);
+}
+
+.media-message-container img {
+  max-width: 100%;
+  object-fit: cover;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.media-message-container video {
+  max-width: 100%;
+  background: #000;
+}
+
+/* ============================================================
+   PAGINATION CONTROLS
+   ============================================================ */
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--foreground);
+  transition: all 150ms ease;
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--surface-raised);
+  border-color: var(--accent);
+}
+
+.pagination-btn.is-active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   DELETE ALL / DANGER BUTTONS
+   ============================================================ */
+.delete-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--danger-text);
+  transition: opacity 150ms ease, transform 150ms ease;
+  cursor: pointer;
+}
+
+.delete-all-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-0.5px);
+}
+
+.delete-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notification-toasts {
+  position: fixed;
+  right: 16px;
+  top: 72px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.notification-toast {
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 10px 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.notification-toast strong,
+.notification-toast span {
+  display: block;
+}
+
+.notification-toast span {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+

@@ -10,10 +10,10 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { conversationId, botActive } = body ?? {}
+  const { psid, botActive } = body ?? {}
   if (
-    (typeof conversationId !== 'string' && typeof conversationId !== 'number') ||
-    String(conversationId).trim() === '' ||
+    typeof psid !== 'string' ||
+    !/^wa_\d{5,20}$/.test(psid) ||
     typeof botActive !== 'boolean'
   ) {
     return NextResponse.json({ success: false, error: 'Invalid request data' }, { status: 400 })
@@ -21,10 +21,11 @@ export async function POST(request) {
 
   try {
     const { data, error } = await supabase
-      .from('conversations')
+      .from('customers')
       .update({ bot_active: botActive })
-      .eq('id', conversationId)
-      .select('id')
+      .eq('psid', psid)
+      .eq('platform', 'whatsapp')
+      .select('psid')
       .maybeSingle()
 
     if (error) {
