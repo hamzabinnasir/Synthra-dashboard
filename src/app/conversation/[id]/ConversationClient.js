@@ -279,8 +279,8 @@ export default function ConversationClient({ conversation, initialMessages, init
 
   return (
     <div className="app-shell chat-page-shell flex h-dvh min-h-0 flex-col overflow-hidden">
-      <header className="chat-header z-10 flex shrink-0 items-center justify-between gap-2 border-b px-3 py-3 backdrop-blur sm:gap-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+      <header className="chat-header z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b px-3 py-3 backdrop-blur sm:flex-nowrap sm:gap-3 sm:px-6">
+        <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto sm:flex-1 sm:gap-4">
           <Link
             href="/"
             aria-label="Back to conversations"
@@ -320,7 +320,7 @@ export default function ConversationClient({ conversation, initialMessages, init
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+        <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end sm:gap-4">
           <ThemeToggle />
           <span
             aria-live="polite"

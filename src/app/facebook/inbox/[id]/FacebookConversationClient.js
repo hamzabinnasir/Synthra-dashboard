@@ -174,8 +174,8 @@ export default function FacebookConversationClient({ customer, initialMessages, 
 
   return (
     <div className="app-shell chat-page-shell flex h-dvh min-h-0 flex-col overflow-hidden">
-      <header className="chat-header z-10 flex shrink-0 items-center justify-between gap-2 border-b px-3 py-3 backdrop-blur sm:gap-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+      <header className="chat-header z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b px-3 py-3 backdrop-blur sm:flex-nowrap sm:gap-3 sm:px-6">
+        <div className="flex min-w-0 basis-full items-center gap-2 sm:basis-auto sm:flex-1 sm:gap-4">
           <Link href={inboxPath} aria-label={`Back to ${channel} inbox`} className="theme-link flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl transition">
             <span aria-hidden="true">←</span>
           </Link>
@@ -211,13 +211,13 @@ export default function FacebookConversationClient({ customer, initialMessages, 
           </div>
         </div>
 
-        <div className="flex min-w-0 shrink items-center gap-2 sm:gap-3 lg:gap-4">
+        <div className="flex w-full min-w-0 shrink items-center justify-between gap-2 sm:w-auto sm:justify-end sm:gap-3 lg:gap-4">
           <ThemeToggle />
           <span aria-live="polite" className="theme-muted flex shrink-0 items-center gap-1.5 text-xs">
             <span className={`h-2 w-2 rounded-full ${liveStatus === 'live' ? 'animate-pulse bg-[#36e5ad]' : 'bg-[#f5be5b]'}`} />
             <span className="hidden xl:inline">{liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Connecting' : 'Syncing'}</span>
           </span>
-          <div className="hidden shrink-0 sm:block">
+          <div className="shrink-0">
             <FacebookBotToggle target="customer" id={customer.psid} active={customer.bot_active} globalActive={globalBotActive} compact />
           </div>
           <button

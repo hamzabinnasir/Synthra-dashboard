@@ -1,5 +1,9 @@
-import { supabase } from '../../../../../lib/supabase.js'
+import { supabase as defaultSupabase } from '../../../../../lib/supabase.js'
+import { getFacebookSupabase } from '../../../../../lib/facebook-supabase.js'
 import { loadCommentAuthors, withAuthor } from '../../../../../lib/comment-authors.js'
+
+// Watch the same database the comments page reads from (falls back to the default project).
+const supabase = getFacebookSupabase() || defaultSupabase
 
 const encoder = new TextEncoder()
 

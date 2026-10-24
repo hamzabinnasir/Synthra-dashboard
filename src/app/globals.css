@@ -870,3 +870,26 @@ textarea {
   color: var(--muted);
 }
 
+
+/* ============================================================
+   MOBILE RESPONSIVE OVERRIDES
+   ============================================================ */
+@media (max-width: 640px) {
+  .conversation-row__link { flex: 1 1 100%; }
+  .conversation-row__actions {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .conversation-row__time { max-width: none; }
+  .app-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-top: 10px; /* keeps the unread badges from being clipped */
+    scrollbar-width: none;
+  }
+  .app-nav::-webkit-scrollbar { display: none; }
+  .ntf-tab { flex: 0 0 auto; white-space: nowrap; }
+}

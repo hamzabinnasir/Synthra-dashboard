@@ -508,3 +508,15 @@
     animation: none;
   }
 }
+
+/* ---------- Mobile: panel spans the screen instead of spilling off the left edge ---------- */
+@media (max-width: 640px) {
+  .ntf-panel {
+    position: fixed;
+    top: 64px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100dvh - 80px);
+  }
+}

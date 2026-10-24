@@ -138,7 +138,8 @@ export function DashboardHeader({ activeSection, initialSettings }) {
           </button>
         </div>
 
-        <nav aria-label="Channels" className="flex w-full flex-wrap items-center gap-2 border-t border-(--line) pt-3 sm:w-auto sm:border-0 sm:pt-0">
+        <nav aria-label="Channels" className="app-nav flex w-full items-center gap-2 border-t border-(--line) pt-3 sm:w-auto sm:flex-wrap sm:border-0 sm:pt-0">
+
           {sections.map((section) => (
             <Link
               key={section.id}
@@ -914,9 +915,88 @@ export function FacebookCommentsList({ comments: initialComments = [], globalBot
     }
   }, [platform])
 
+  // Deletions made directly on Facebook/Instagram: ask the server to verify the newest comments against
+  // Meta (it deletes the ones Meta confirms are gone, twice-checked). Realtime then pushes the DELETE to
+  // every open dashboard; the ids returned here also remove the cards from this tab immediately.
+  useEffect(() => {
+    let active = true
+    let running = false
+
+    const syncWithPlatform = async () => {
+      if (running || document.visibilityState === 'hidden') return
+      running = true
+      try {
+        const response = await fetch('/api/comments/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform }),
+          cache: 'no-store',
+        })
+        if (!response.ok) return
+        const result = await response.json()
+        if (!active || !result.success || !Array.isArray(result.removed) || !result.removed.length) return
+        const removed = new Set(result.removed)
+        setComments((prev) => prev.filter((c) => !removed.has(c.comment_id)))
+      } catch {} finally {
+        running = false
+      }
+    }
+
+    const first = setTimeout(syncWithPlatform, 2000)
+    const interval = setInterval(syncWithPlatform, 15000)
+    document.addEventListener('visibilitychange', syncWithPlatform)
+    return () => {
+      active = false
+      clearTimeout(first)
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', syncWithPlatform)
+    }
+  }, [platform])
+
   const handleDeleteLocally = (commentId) => {
     setComments((prev) => prev.filter((c) => c.comment_id !== commentId))
   }
+
+  // Safety net for deletions made on Facebook/Instagram: the backend removes the row from Supabase
+  // and Realtime normally pushes `comment-deleted`, but if that event is ever missed (dropped
+  // connection, sleeping tab) this poll prunes anything the database no longer has.
+  useEffect(() => {
+    let active = true
+
+    const pruneDeleted = async () => {
+      if (document.visibilityState === 'hidden') return
+      const startedAt = Date.now()
+      try {
+        const response = await fetch(`/api/comments/list?platform=${encodeURIComponent(platform)}`, { cache: 'no-store' })
+        if (!response.ok) return
+        const result = await response.json()
+        if (!active || !result.success || !Array.isArray(result.ids)) return
+        const serverIds = new Set(result.ids)
+        const oldest = result.oldest ? new Date(result.oldest).getTime() : null
+        setComments((prev) => {
+          const next = prev.filter((comment) => {
+            if (serverIds.has(comment.comment_id)) return true
+            const created = new Date(comment.created_at || 0).getTime()
+            // Keep comments that arrived while this request was in flight.
+            if (created > startedAt - 10000) return true
+            // Keep comments older than the window the server answered about.
+            if (oldest !== null && created < oldest) return true
+            return false
+          })
+          return next.length === prev.length ? prev : next
+        })
+      } catch {}
+    }
+
+    const interval = setInterval(pruneDeleted, 8000)
+    document.addEventListener('visibilitychange', pruneDeleted)
+    return () => {
+      active = false
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', pruneDeleted)
+    }
+  }, [platform])
+
 
   // Show a reply sent from this page straight away; it is re-synced from the database later.
   const handleReplied = (commentId, reply) => {
@@ -1107,8 +1187,8 @@ function FacebookCommentActions({ comment, onDeleted, onReplied }) {
   }
 
   return (
-    <div className="facebook-comment-actions">
-      <form onSubmit={sendReply} className="flex w-64 max-w-[36vw] flex-col gap-2">
+    <div className="facebook-comment-actions w-full sm:w-auto">
+      <form onSubmit={sendReply} className="flex w-full flex-col gap-2 sm:w-64 sm:max-w-[36vw]">
         <select aria-label="Comment reply visibility" value={mode} onChange={(event) => setMode(event.target.value)} className="chat-input rounded-lg px-2 py-1 text-xs">
           <option value="private" disabled={privateReplySent}>Private inbox reply{privateReplySent ? ' (already sent)' : ''}</option>
           <option value="public">Public comment reply</option>
@@ -1160,8 +1240,8 @@ export function FacebookMessageHistory({ customer, messages: initialMessages, er
 
   return (
     <main className="mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
-      <Link href="/facebook/inbox" className="theme-link mb-5 inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm">
-        <span aria-hidden="true">←</span> Back to Facebook inbox
+      <Link href={`/${customer.platform === 'instagram' ? 'instagram' : 'facebook'}/inbox`} className="theme-link mb-5 inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm">
+        <span aria-hidden="true">←</span> Back to {customer.platform === 'instagram' ? 'Instagram' : 'Facebook'} inbox
       </Link>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-(--line) pb-4">
         <div className="min-w-0">
