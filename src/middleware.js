@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 const SESSION_COOKIE = 'admin_session'
 const AUTH_PAGES = ['/login', '/forgot-password', '/reset-password']
-const PUBLIC_PREFIXES = ['/api/auth', '/_next']
+const PUBLIC_PREFIXES = ['/api/auth', '/_next', '/api/push/notify']
 const PUBLIC_FILES = ['/favicon.ico', '/synthra-mark.svg']
 
 const encoder = new TextEncoder()

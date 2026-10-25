@@ -1,5 +1,8 @@
 import { getFacebookSupabase } from '../../../../../lib/facebook-supabase.js'
+import { getGlobalBotSettings } from '../../../../../lib/facebook-dashboard.js'
 import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 
 const allowedSettings = new Set([
   'comment_bot_active',
@@ -8,6 +11,17 @@ const allowedSettings = new Set([
   'instagram_inbox_bot_active',
   'whatsapp_inbox_bot_active',
 ])
+
+// GET /api/facebook/global-settings -> { success, settings: { <flag>: boolean }, connected }
+// Used by the mobile app to show which bots are paused globally.
+export async function GET() {
+  try {
+    const { settings, connected } = await getGlobalBotSettings()
+    return NextResponse.json({ success: true, settings, connected })
+  } catch {
+    return NextResponse.json({ success: false, error: 'Could not load global bot settings' }, { status: 500 })
+  }
+}
 
 export async function POST(request) {
   let body
