@@ -4,4 +4,8 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug builds only: allow plain http:// so the app can reach the dashboard running on your PC
+         (http://10.0.2.2:3000 from the emulator, http://<PC LAN IP>:3000 from a real phone).
+         Release builds keep Android's default of HTTPS only. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

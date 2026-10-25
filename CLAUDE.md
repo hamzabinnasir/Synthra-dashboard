@@ -20,6 +20,10 @@ Do NOT read or print `.env.local` (secrets). Use `.env.example` to see variable 
   `admin_session`. **Mobile uses `Authorization: Bearer <jwt>`**; login with header `x-client-platform: mobile`
   returns `{ success, token, user }` (30-day token). `src/middleware.js` protects everything except
   `/api/auth/*` (login, logout, forgot-password, reset-password); API 401 => `{ success:false, error:'Unauthorized' }`.
+  `getCurrentAdmin()` accepts the request, a cookie store, or (fallback) the Bearer header from `next/headers`, so
+  routes using `getCurrentAdmin(await cookies())` also work for mobile. `GET /api/admin/profile` => `{ user }`.
+  `POST /api/auth/forgot-password { email }` emails a WEB link `/reset-password?token=...`;
+  `POST /api/auth/reset-password { token, newPassword }` (min 8 chars). The app's reset screen accepts the pasted link/token.
 - IDs: WhatsApp conversation id `psid` = `wa_<digits>`, Instagram `ig_<id>`, Facebook = plain PSID.
   Tables: `customers` (conversations), `messages`, `comments`, `activity_logs`, `bot_settings`, `admin_users`,
   `device_tokens` (new, see `supabase/migrations/20261026_device_tokens.sql`).
@@ -52,7 +56,9 @@ Dark + light theme matching web dashboard.
 
 ### Stage status
 1. Backend for mobile (Bearer auth, `/api/comments`, `/api/devices` + SQL migration) - DONE
-2. Flutter foundation: API client, secure session, login, forgot/reset password - TODO
+2. Flutter foundation: API client, secure session, login, forgot/reset password - DONE
+   (`mobile/lib/core` = config/theme/router/api_client/token storage; `features/auth` = controller, repo, screens;
+   `features/home` = placeholder. `flutter analyze` clean, 11 tests pass. Not yet run on a device/emulator.)
 3. Inbox (WA/FB/IG) + chat screen, live updates, send text/media, bot toggle, rename, delete - TODO
 4. Comments (FB/IG): list, reply, private reply, delete, bot toggle - TODO
 5. Notifications center + FCM push, profile, theme - TODO
