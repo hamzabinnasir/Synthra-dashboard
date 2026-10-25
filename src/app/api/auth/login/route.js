@@ -31,14 +31,23 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Invalid email or password' }, { status: 401 })
     }
 
-    const token = signJwt({
-      userId: adminUser.id,
-      email: adminUser.email,
-      name: adminUser.name,
-    })
+    // The Flutter app cannot use the httpOnly cookie, so it opts in with this header and receives
+    // the token in the JSON body (stored in secure storage on the device). Web clients never get
+    // the token in JavaScript-readable form.
+    const isMobile = request.headers.get('x-client-platform') === 'mobile'
+
+    const token = signJwt(
+      {
+        userId: adminUser.id,
+        email: adminUser.email,
+        name: adminUser.name,
+      },
+      isMobile ? 30 * 86400 : undefined
+    )
 
     const response = NextResponse.json({
       success: true,
+      ...(isMobile ? { token } : {}),
       user: {
         id: adminUser.id,
         email: adminUser.email,

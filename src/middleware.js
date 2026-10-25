@@ -56,7 +56,8 @@ async function isValidSession(token) {
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl
-  const token = request.cookies.get(SESSION_COOKIE)?.value
+  const bearer = /^Bearer\s+(.+)$/i.exec((request.headers.get('authorization') || '').trim())?.[1]?.trim()
+  const token = request.cookies.get(SESSION_COOKIE)?.value || bearer
   const authed = await isValidSession(token)
 
   if (AUTH_PAGES.includes(pathname)) {
