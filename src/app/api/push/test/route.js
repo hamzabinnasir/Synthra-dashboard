@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '../../../../../lib/supabase.js'
 import { getCurrentAdmin } from '../../../../../lib/auth.js'
-import { fcmConfigured, sendPush } from '../../../../../lib/fcm.js'
+import { fcmConfigured, fcmProblem, sendPush } from '../../../../../lib/fcm.js'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -19,6 +19,13 @@ export async function POST(request) {
     fcm_configured: fcmConfigured(),
     webhook_secret_configured: Boolean(process.env.PUSH_WEBHOOK_SECRET),
     app_url: process.env.NEXT_PUBLIC_APP_URL || null,
+    // Which deployment actually answered this request (tells you if the phone talks to the wrong server).
+    server: {
+      vercel_env: process.env.VERCEL_ENV || 'not-on-vercel',
+      branch: process.env.VERCEL_GIT_COMMIT_REF || null,
+      commit: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || null,
+      host: request.headers.get('host') || null,
+    },
     registered_devices: 0,
     delivered: 0,
     failed: 0,
@@ -26,9 +33,10 @@ export async function POST(request) {
   }
 
   if (!checks.fcm_configured) {
+    const where = `${checks.server.vercel_env}${checks.server.branch ? `/${checks.server.branch}` : ''} @ ${checks.server.host || 'unknown host'}`
     return NextResponse.json({
       success: false,
-      error: 'The server has no Firebase key. Set FIREBASE_SERVICE_ACCOUNT_JSON (service-account JSON or its base64) and redeploy.',
+      error: `The server has no usable Firebase key (answered by ${where}): ${fcmProblem()}.`,
       checks,
     })
   }
