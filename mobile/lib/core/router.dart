@@ -8,6 +8,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/inbox/presentation/chat_screen.dart';
 
 const _publicRoutes = {'/login', '/forgot-password', '/reset-password'};
 
@@ -37,6 +38,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
+      GoRoute(
+        path: '/chat/:psid',
+        builder: (_, state) => ChatScreen(psid: state.pathParameters['psid']!),
+      ),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/forgot-password', builder: (_, _) => const ForgotPasswordScreen()),
       GoRoute(

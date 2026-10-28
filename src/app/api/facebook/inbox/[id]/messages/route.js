@@ -5,8 +5,15 @@ export const dynamic = 'force-dynamic'
 
 const PAGE = 1000
 const MAX_FULL = 5000
-const FULL_COLUMNS = 'id,sender,text,created_at,media_url,media_type,media_mime_type,media_filename'
-const BASIC_COLUMNS = 'id,sender,text,created_at'
+// Richest column set first; steps down when the database does not have a column yet
+// (receipts: supabase/migrations/20261027_message_receipts.sql, media_*: older media migration).
+const COLUMN_TIERS = [
+  'id,sender,text,created_at,media_url,media_type,media_mime_type,media_filename,media_status,delivery_status,delivered_at,read_at,edited_at',
+  'id,sender,text,created_at,media_url,media_type,media_mime_type,media_filename,media_status,delivery_status,delivered_at,read_at',
+  'id,sender,text,created_at,media_url,media_type,media_mime_type,media_filename,delivery_status,delivered_at,read_at',
+  'id,sender,text,created_at,media_url,media_type,media_mime_type,media_filename',
+  'id,sender,text,created_at',
+]
 
 export async function GET(request, { params }) {
   const { id } = await params
@@ -25,11 +32,13 @@ export async function GET(request, { params }) {
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
 
-  // Runs a query and retries without media columns if the database doesn't have them yet.
+  // Remembers the first column set that works so later calls do not repeat the failed attempts.
+  let tier = 0
   const run = async (apply) => {
-    let result = await apply(build(FULL_COLUMNS))
-    if (result.error && String(result.error.message || '').includes('media_')) {
-      result = await apply(build(BASIC_COLUMNS))
+    let result = await apply(build(COLUMN_TIERS[tier]))
+    while (result.error && tier < COLUMN_TIERS.length - 1) {
+      tier += 1
+      result = await apply(build(COLUMN_TIERS[tier]))
     }
     return result
   }

@@ -59,9 +59,33 @@ Dark + light theme matching web dashboard.
 2. Flutter foundation: API client, secure session, login, forgot/reset password - DONE
    (`mobile/lib/core` = config/theme/router/api_client/token storage; `features/auth` = controller, repo, screens;
    `features/home` = placeholder. `flutter analyze` clean, 11 tests pass. Not yet run on a device/emulator.)
-3. Inbox (WA/FB/IG) + chat screen, live updates, send text/media, bot toggle, rename, delete - TODO
-4. Comments (FB/IG): list, reply, private reply, delete, bot toggle - TODO
-5. Notifications center + FCM push, profile, theme - TODO
+3. Inbox (WA/FB/IG) + chat screen, live updates, send text/media, bot toggle, rename, delete - CODE COMPLETE, NOT VERIFIED
+   (`features/inbox` = domain/data/application/presentation. Media send added last: `domain/attachment.dart`,
+   `ChatRepository.sendMedia`, `widgets/attachment_flow.dart`, paperclip in composer for WhatsApp chats only.
+   `POST /api/send-media` is WhatsApp-only, multipart fields `psid`, `caption`, `file`, returns `{ success, message }`;
+   limits: images jpg/png 5 MB, video mp4/3gp, audio aac/m4a/mp3/amr/ogg, docs pdf/office/txt up to 10 MB.
+   Packages added: image_picker ^1.1.2, file_picker ^13.1.0 (static API: `FilePicker.pickFile`). iOS Info.plist
+   camera/photo strings added. TODO: `flutter pub get; flutter analyze`, test on a device, then mark DONE + commit.)
+4. Comments (FB/IG): list, reply, private reply, delete, bot toggle - CODE COMPLETE, NOT VERIFIED
+   (`features/comments`; tabs FB/IG in `CommentsPage`; live via `/api/comments/events` + 30s sync poll.)
+5. Notifications center, profile, theme - CODE COMPLETE, NOT VERIFIED (VS Code Dart diagnostics clean; `flutter analyze`/tests not run)
+   (`features/notifications` = list with client-side filters, mark read/all, delete/clear, settings sheet, in-app banner
+   for live events; `/api/notifications` rows: id, platform, type, source_type, target_id, customer_*, message_preview,
+   is_read, created_at. Tap opens `/chat/:target_id` or the Comments tab. `features/profile` = name, password, theme,
+   sign out via `POST /api/admin/profile`. `core/theme_mode.dart` stores light/dark/system in secure storage.
+   Home has 4 tabs (Inbox, Comments, Alerts with unread badge, Profile) driven by `homeTabProvider`.
+   Riverpod gotcha: `AsyncNotifier.update` already exists, do not name a method `update`.)
+   Profile photo upload/remove: DONE in code (tap the avatar on the Profile tab; `ProfileRepository.updateAvatar/removeAvatar`
+   send a base64 data URL in `avatar` to `POST /api/admin/profile`; server accepts JPEG/PNG/WebP up to 5 MB, `null` removes it).
+   Not run on a device yet; `flutter pub get` + `flutter analyze` were clean before the sound work.
+   Sound alerts: code written, `flutter pub get` + `flutter analyze` clean (added `flutter_ringtone_player_plus`;
+   `core/alert_sound.dart` plays `FlutterRingtonePlayer().playNotification()`; Sound toggle in the notification settings
+   sheet; played from `NotificationsController._onNew` when `soundEnabled` and not muted/DND). Flutter's
+   `SystemSound.alert` is silent on Android, hence the plugin. Verify it compiles and the sound plays on a device.
+   STILL TODO: FCM push (needs Firebase project + `google-services.json`, `firebase_messaging`, a backend sender that
+   reads `device_tokens`, and `POST /api/devices` registration from the app).
+   Known nit: `NotificationsState.copyWith(incoming: null)` cannot clear `incoming` (`??` fallback); harmless today
+   because the home screen compares with `identical`.
 6. Polish, error/empty states, offline cache, release builds - TODO
 
 ## Working conventions

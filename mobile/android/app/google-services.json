@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "163627685249",
+    "project_id": "synthra-social-assistant",
+    "storage_bucket": "synthra-social-assistant.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163627685249:android:3468e9b01612d789778480",
+        "android_client_info": {
+          "package_name": "com.synthra.synthra_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCF8mC43w7D84YxA-H4j0OujCe8TUWnHQc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -64,6 +64,29 @@ class ApiClient {
   Future<Map<String, dynamic>> post(String path, {Object? body}) =>
       _send(() => dio.post<dynamic>(path, data: body));
 
+  Future<Map<String, dynamic>> patch(String path, {Object? body}) =>
+      _send(() => dio.patch<dynamic>(path, data: body));
+
+  /// Multipart upload (files). Uploads can be large and the server forwards them to other services,
+  /// so this uses much longer timeouts than ordinary JSON calls.
+  Future<Map<String, dynamic>> postForm(
+    String path,
+    FormData form, {
+    void Function(int sent, int total)? onProgress,
+  }) =>
+      _send(
+        () => dio.post<dynamic>(
+          path,
+          data: form,
+          onSendProgress: onProgress,
+          options: Options(
+            sendTimeout: const Duration(minutes: 3),
+            receiveTimeout: const Duration(minutes: 2),
+          ),
+        ),
+      );
+
+
   Future<Map<String, dynamic>> delete(String path, {Object? body}) =>
       _send(() => dio.delete<dynamic>(path, data: body));
 

@@ -13,20 +13,25 @@ const COLUMN_TIERS = [
   { columns: 'psid,name,platform,bot_active,last_message_text,last_activity_at,created_at', marker: 'custom_name|username' },
 ]
 
-function buildQuery(columns, platform) {
-  let query = supabase.from('customers').select(columns)
-
+function applyPlatform(query, platform) {
   if (platform === 'whatsapp') {
-    query = query.or('platform.eq.whatsapp,psid.ilike.wa_%')
-  } else if (platform === 'instagram') {
-    query = query.or('platform.eq.instagram,psid.ilike.ig_%')
-  } else if (platform === 'facebook') {
-    query = query.or('platform.eq.facebook,platform.is.null')
-  } else if (platform) {
-    query = query.eq('platform', platform)
+    return query.or('platform.eq.whatsapp,psid.ilike.wa_%')
   }
-
+  if (platform === 'instagram') {
+    return query.or('platform.eq.instagram,psid.ilike.ig_%')
+  }
+  if (platform === 'facebook') {
+    return query.or('platform.eq.facebook,platform.is.null')
+  }
+  if (platform) {
+    return query.eq('platform', platform)
+  }
   return query
+}
+
+function buildQuery(columns, platform) {
+  // `count: 'exact'` returns the real number of conversations of this channel, not just the 100 rows sent.
+  return applyPlatform(supabase.from('customers').select(columns, { count: 'exact' }), platform)
     .order('last_activity_at', { ascending: false, nullsFirst: false })
     .limit(100)
 }
@@ -45,13 +50,14 @@ export async function GET(request) {
       result = await buildQuery(COLUMN_TIERS[tier].columns, platform)
     }
 
-    const { data: customers, error } = result
+    const { data: customers, error, count } = result
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 
-    const filtered = (customers || []).filter((c) => {
+    const rows = customers || []
+    const filtered = rows.filter((c) => {
       const psid = String(c.psid || '')
       if (platform === 'facebook' && (psid.startsWith('wa_') || psid.startsWith('ig_'))) {
         return false
@@ -59,7 +65,11 @@ export async function GET(request) {
       return true
     })
 
-    return NextResponse.json({ success: true, customers: filtered })
+    // Facebook rows with a wa_/ig_ id are dropped above; take them off the exact count too.
+    const dropped = rows.length - filtered.length
+    const total = Math.max(filtered.length, (typeof count === 'number' ? count : filtered.length) - dropped)
+
+    return NextResponse.json({ success: true, customers: filtered, total })
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
   }

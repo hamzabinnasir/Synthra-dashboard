@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/providers.dart';
+import '../../../core/push_service.dart';
 import '../data/auth_repository.dart';
 import '../domain/admin_user.dart';
 
@@ -77,7 +78,15 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState.authenticated(user);
   }
 
+  /// Replaces the signed-in user's details after a profile edit.
+  void updateUser(AdminUser user) {
+    if (state.status != AuthStatus.authenticated) return;
+    state = AuthState.authenticated(user);
+  }
+
   Future<void> logout() async {
+    // Stop push alerts for this phone while the session token still works (the server needs it).
+    await ref.read(pushServiceProvider).unregister();
     await _repo.clearSession();
     state = const AuthState.unauthenticated();
   }
